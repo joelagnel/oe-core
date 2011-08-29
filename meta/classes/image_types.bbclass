@@ -90,101 +90,69 @@ IMAGE_CMD_ubifs = "mkfs.ubifs -r ${IMAGE_ROOTFS} -o ${DEPLOY_DIR_IMAGE}/${IMAGE_
 
 IMAGE_CMD_sdimg () {
         MD5SUM_SD="$(md5sum ${IMAGE_ROOTFS}/boot/uImage | awk '{print $1}')" 
-        for sdsize in $(ls ${WORKDIR}/conf/sd/sd-master* | sed -e s:${WORKDIR}/conf/sd/sd-master-::g -e 's:.img.gz::g' | xargs echo) ; do
-        echo "SD size: $sdsize"
+	SDIMG=${WORKDIR}/sd.img
 
-        if true ; then
-                echo "No cached SD image found, generating new one"
-                zcat ${WORKDIR}/conf/sd/sd-master-$sdsize.img.gz > ${WORKDIR}/sd.img
-                /sbin/fdisk -l -u ${WORKDIR}/sd.img
+	# cleanup loops
+	for loop in $(losetup -j ${SDIMG}); do
+		loop_dev=$(echo $loop|cut -d ":" -f 1)
+		umount $loop_dev || true
+		losetup -d $loop_dev || true
+	done
 
-                # Output looks like:
-                # Disk sd-master-1GiB.img: 0 MB, 0 bytes
-                # 255 heads, 63 sectors/track, 0 cylinders, total 0 sectors
-                # Units = sectors of 1 * 512 = 512 bytes
-                # Sector size (logical/physical): 512 bytes / 512 bytes
-                # I/O size (minimum/optimal): 512 bytes / 512 bytes
-                # Disk identifier: 0x00000000
-                # 
-                #             Device Boot      Start         End      Blocks   Id  System
-                # sd-master-1GiB.img1   *          63      144584       72261    c  W95 FAT32 (LBA)
-                # sd-master-1GiB.img2          144585     1959929      907672+  83  Linux
+	dd if=/dev/zero of=${SDIMG} bs=4k seek=$(echo '256 * 1024' | bc) count=1
+	losetup -f ${SDIMG}
+	LOOPDEV=$(losetup -j ${SDIMG} -o 0 | cut -d ":" -f 1)
 
+	mkcard ${LOOPDEV}
 
-                BYTES_PER_SECTOR="$(/sbin/fdisk -l -u sd.img | grep Units | awk '{print $9}')"
-                VFAT_SECTOR_OFFSET="$(/sbin/fdisk -l -u sd.img | grep img1 | awk '{print $3}')"
-                EXT3_SECTOR_OFFSET="$(/sbin/fdisk -l -u sd.img | grep img2 | awk '{print $2}')"
+	BOOT_OFFSET=63
+	FS_OFFSET=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
 
-                LOOP_DEV="/dev/loop1"
-                LOOP_DEV_FS="/dev/loop2"
-                umount ${LOOP_DEV} || true
-                umount ${LOOP_DEV_FS} || true
-                /sbin/losetup -d ${LOOP_DEV} || true
-                /sbin/losetup -d ${LOOP_DEV_FS} || true
+	losetup -f ${SDIMG} -o ${BOOT_OFFSET}
+	LOOPDEV_BOOT=$(losetup -j ${SDIMG} -o ${BOOT_OFFSET} | cut -d ":" -f 1)
+        mkfs.vfat -F 32 -n "boot" ${LOOPDEV_BOOT}
 
-                echo ""
+	losetup -f ${SDIMG} -o ${FS_OFFSET}	
+	LOOPDEV_FS=$(losetup -j ${SDIMG} -o ${FS_OFFSET} | cut -d ":" -f 1)
+        mke2fs -j -L "Angstrom" ${LOOPDEV_FS}
 
-                # VFAT
-                echo "/sbin/losetup -v -o $(expr ${BYTES_PER_SECTOR} "*" ${VFAT_SECTOR_OFFSET}) ${LOOP_DEV} ${WORKDIR}/sd.img"
-                /sbin/losetup -v -o $(expr ${BYTES_PER_SECTOR} "*" ${VFAT_SECTOR_OFFSET}) ${LOOP_DEV} ${WORKDIR}/sd.img
-
-                # EXT3
-                echo "/sbin/losetup -v -o $(expr ${BYTES_PER_SECTOR} "*" ${EXT3_SECTOR_OFFSET}) ${LOOP_DEV_FS} ${WORKDIR}/sd.img"
-                /sbin/losetup -v -o $(expr ${BYTES_PER_SECTOR} "*" ${EXT3_SECTOR_OFFSET}) ${LOOP_DEV_FS} ${WORKDIR}/sd.img
-                echo "/sbin/mkfs.ext3 -L Narcissus-rootfs ${LOOP_DEV_FS}"
-                /sbin/mkfs.ext3 -L Narcissus-rootfs ${LOOP_DEV_FS}
-
-                echo ""
-
-                echo "mount ${LOOP_DEV}"
-                mount ${LOOP_DEV}
-
-                echo "mount ${LOOP_DEV_FS}"
-                mount ${LOOP_DEV_FS}
-
-                # report mount status to log
-                mount | grep loop
-
-                if [ -e ${IMAGE_ROOTFS}/boot/MLO ] ; then
-                	cp -v ${IMAGE_ROOTFS}/boot/MLO /mnt/narcissus/sd_image1/MLO
-                fi
-
-                echo "Remounting ${LOOP_DEV}"
-                umount ${LOOP_DEV}
-                mount ${LOOP_DEV}
-
-                echo "Copying file system:"
-		cp -r ${IMAGE_ROOTFS}/* /mnt/narcissus/sd_images2/ || true
-
-		echo "Copying bootloaders into the boot partition"
-                cp -v /mnt/narcissus/sd_image2/boot/u-boot-*.bin /mnt/narcissus/sd_image1/u-boot.bin || true
-                cp -v /mnt/narcissus/sd_image2/boot/uImage-2.6* /mnt/narcissus/sd_image1/uImage || true
-                cp -v /mnt/narcissus/sd_image2/boot/user.txt /mnt/narcissus/sd_image1/ || true
-                cp -v /mnt/narcissus/sd_image2/boot/uEnv.txt /mnt/narcissus/sd_image1/ || true
-
-                if [ ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}.ubi ] ; then
-                        echo "Copying UBIFS image to file system:"
-                        cp ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}.ubi /mnt/narcissus/sd_image2/boot/fs.ubi
-                fi
-
-                touch  /mnt/narcissus/sd_image2/narcissus-was-here
-                echo "Remounting ${LOOP_DEV_FS}"
-                umount ${LOOP_DEV_FS}
-                mount ${LOOP_DEV_FS}
-
-                echo "files in ext3 partition:" $(du -hs /mnt/narcissus/sd_image2/* | sed s:/mnt/narcissus/sd_image2/::g)
-
-                echo "umount ${LOOP_DEV}"       
-                umount ${LOOP_DEV}
-                echo "umount ${LOOP_DEV_FS}"
-                umount ${LOOP_DEV_FS}
-
-                /sbin/losetup -d ${LOOP_DEV}
-                /sbin/losetup -d ${LOOP_DEV_FS}
-
-                gzip -c sd.img > ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}-${MACHINE}-sd-$sdsize.img.gz
+        # sanity check fstab entries
+        if [ "x$(cat /etc/fstab | grep $LOOPDEV_BOOT | grep ${WORKDIR}/tmp-mnt-boot | grep user || true)" = "x" ]; then
+                echo "/etc/fstab entries need to be created with the user flag for $LOOPDEV_BOOT like:"
+                echo "$LOOPDEV_BOOT ${WORKDIR}/tmp-mnt-boot msdos user 0 0"
+                false
         fi
-        done
+        if [ "x$(cat /etc/fstab | grep $LOOPDEV_FS | grep ${WORKDIR}/tmp-mnt-fs | grep user || true)" = "x" ]; then
+                echo "/etc/fstab entries need to be created with the user flag for $LOOPDEV_FS"
+                echo "$LOOPDEV_FS ${WORKDIR}/tmp-mnt-fs ext3 user,dev,suid 0 0"
+                false
+        fi
+
+	mkdir -p ${WORKDIR}/tmp-mnt-fs ${WORKDIR}/tmp-mnt-boot
+	mount $LOOPDEV_FS
+	mount $LOOPDEV_BOOT
+
+        echo "Copying file system:"
+	cp -r ${IMAGE_ROOTFS}/* ${WORKDIR}/tmp-mnt-fs || true
+
+	echo "Copying bootloaders into the boot partition"
+       	cp -v ${IMAGE_ROOTFS}/boot/MLO ${WORKDIR}/tmp-mnt-boot || true
+       	cp -v ${IMAGE_ROOTFS}/boot/{MLO,u-boot-*.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
+
+        if [ -e  ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}.rootfs.ubi ] ; then
+                echo "Copying UBIFS image to file system"
+                cp ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}.rootfs.ubi ${WORKDIR}/tmp-mnt-fs/boot/fs.ubi
+        fi
+
+	exit 0
+
+        umount ${LOOPDEV_BOOT}
+        umount ${LOOPDEV_FS}
+ 
+        /sbin/losetup -d ${LOOP_DEV}
+        /sbin/losetup -d ${LOOP_DEV_FS}
+
+        gzip -c sd.img > ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}-${MACHINE}-sd-$sdsize.img.gz
 }
 
 EXTRA_IMAGECMD = ""
