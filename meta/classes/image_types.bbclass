@@ -140,8 +140,8 @@ IMAGE_CMD_sdimg () {
 	mount $LOOPDEV_BOOT
 
 	echo "Copying bootloaders into the boot partition"
-       	cp -v ${IMAGE_ROOTFS}/boot/MLO ${WORKDIR}/tmp-mnt-boot || true
-       	cp -v ${IMAGE_ROOTFS}/boot/{MLO,u-boot.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
+       	cp -v ${IMAGE_ROOTFS}/boot/MLO ${WORKDIR}/tmp-mnt-boot 
+       	cp -v ${IMAGE_ROOTFS}/boot/{u-boot.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
 
 	# cleanup
         umount ${LOOPDEV_BOOT}
