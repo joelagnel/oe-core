@@ -106,7 +106,7 @@ IMAGE_CMD_sdimg () {
 	mkcard ${LOOPDEV}
 
 	# Prepare loop devices for boot and filesystem partitions
-	BOOT_OFFSET=63
+	BOOT_OFFSET=32256
 	FS_OFFSET=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
 
 	losetup -f ${SDIMG} -o ${BOOT_OFFSET}
@@ -128,7 +128,7 @@ IMAGE_CMD_sdimg () {
 	# Prepare boot partion. First mount the boot partition, and copy the boot loader and supporting files
 	# from the root filesystem
 
-        # sanity check fstab entry for boot partition
+        # sanity check fstab entry for boot partition mounting
         if [ "x$(cat /etc/fstab | grep $LOOPDEV_BOOT | grep ${WORKDIR}/tmp-mnt-boot | grep user || true)" = "x" ]; then
                 echo "/etc/fstab entries need to be created with the user flag for $LOOPDEV_BOOT like:"
                 echo "$LOOPDEV_BOOT ${WORKDIR}/tmp-mnt-boot msdos user 0 0"
@@ -140,7 +140,7 @@ IMAGE_CMD_sdimg () {
 
 	echo "Copying bootloaders into the boot partition"
        	cp -v ${IMAGE_ROOTFS}/boot/MLO ${WORKDIR}/tmp-mnt-boot || true
-       	cp -v ${IMAGE_ROOTFS}/boot/{MLO,u-boot-*.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
+       	cp -v ${IMAGE_ROOTFS}/boot/{MLO,u-boot.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
 
         umount ${LOOPDEV_BOOT}
  
