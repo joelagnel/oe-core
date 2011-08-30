@@ -107,7 +107,8 @@ IMAGE_CMD_sdimg () {
 
 	# Prepare loop devices for boot and filesystem partitions
 	BOOT_OFFSET=32256
-	FS_OFFSET=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
+	FS_OFFSET_SECT=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
+	FS_OFFSET=$(echo "$FS_OFFSET_SECT * 512" | bc)
 
 	losetup -f ${SDIMG} -o ${BOOT_OFFSET}
 	LOOPDEV_BOOT=$(losetup -j ${SDIMG} -o ${BOOT_OFFSET} | cut -d ":" -f 1)
