@@ -142,13 +142,13 @@ IMAGE_CMD_sdimg () {
        	cp -v ${IMAGE_ROOTFS}/boot/MLO ${WORKDIR}/tmp-mnt-boot || true
        	cp -v ${IMAGE_ROOTFS}/boot/{MLO,u-boot.bin,user.txt,uEnv.txt} ${WORKDIR}/tmp-mnt-boot || true
 
-        umount ${LOOPDEV_BOOT}
- 
 	# cleanup
+        umount ${LOOPDEV_BOOT}
+        /sbin/losetup -d ${LOOPDEV}
         /sbin/losetup -d ${LOOPDEV_BOOT}
         /sbin/losetup -d ${LOOPDEV_FS}
 
-        # gzip -c sd.img > ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}-${MACHINE}-sd-$sdsize.img.gz
+        gzip -c ${WORKDIR}/sd.img > ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}-${PR}.img.gz
 }
 
 EXTRA_IMAGECMD = ""
