@@ -112,7 +112,7 @@ IMAGE_CMD_sdimg () {
 
 	losetup -f ${SDIMG} -o ${BOOT_OFFSET}
 	LOOPDEV_BOOT=$(losetup -j ${SDIMG} -o ${BOOT_OFFSET} | cut -d ":" -f 1)
-        mkfs.vfat -F 32 -n "boot" ${LOOPDEV_BOOT}
+        mkfs.msdos ${LOOPDEV_BOOT} -n boot
 
 	losetup -f ${SDIMG} -o ${FS_OFFSET}	
 	LOOPDEV_FS=$(losetup -j ${SDIMG} -o ${FS_OFFSET} | cut -d ":" -f 1)
