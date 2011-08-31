@@ -110,7 +110,11 @@ IMAGE_CMD_sdimg () {
 	FS_OFFSET_SECT=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
 	FS_OFFSET=$(echo "$FS_OFFSET_SECT * 512" | bc)
 
-	losetup -f ${SDIMG} -o ${BOOT_OFFSET}
+	LOOPDEV_BLOCKS=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep FAT | perl -p -i -e "s/\s+/ /g"|cut -d " " -f 5)
+	LOOPDEV_BYTES=$(echo "$LOOPDEV_BLOCKS * 1024" | bc)
+
+	losetup -f ${SDIMG} -o ${BOOT_OFFSET} --sizelimit=$LOOPDEV_BYTES
+
 	LOOPDEV_BOOT=$(losetup -j ${SDIMG} -o ${BOOT_OFFSET} | cut -d ":" -f 1)
         mkfs.msdos ${LOOPDEV_BOOT} -n boot
 
