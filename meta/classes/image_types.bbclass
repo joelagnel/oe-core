@@ -109,7 +109,8 @@ IMAGE_CMD_sdimg () {
 	BOOT_OFFSET=32256
 	FS_OFFSET_SECT=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /"|cut -d " " -f 2)
 	FS_OFFSET=$(echo "$FS_OFFSET_SECT * 512" | bc)
-
+	FS_SIZE_BLOCKS=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep Linux | perl -p -i -e "s/\s+/ /g"|cut -d " " -f 4 | cut -d "+" -f 1)
+ 
 	LOOPDEV_BLOCKS=$(/sbin/fdisk -l -u $LOOPDEV 2>&1 | grep FAT | perl -p -i -e "s/\s+/ /g"|cut -d " " -f 5)
 	LOOPDEV_BYTES=$(echo "$LOOPDEV_BLOCKS * 1024" | bc)
 
@@ -128,7 +129,7 @@ IMAGE_CMD_sdimg () {
                cp ${DEPLOY_DIR_IMAGE}/${IMAGE_NAME}.rootfs.ubi ${IMAGE_ROOTFS}/boot/fs.ubi
         fi
 	ROOTFS_SIZE="$(du -ks ${IMAGE_ROOTFS} | awk '{print 65536 + $1}')"
-	genext2fs -b ${ROOTFS_SIZE} -d ${IMAGE_ROOTFS} ${LOOPDEV_FS}
+	genext2fs -b ${FS_SIZE_BLOCKS} -d ${IMAGE_ROOTFS} ${LOOPDEV_FS}
 
 	# Prepare boot partion. First mount the boot partition, and copy the boot loader and supporting files
 	# from the root filesystem
